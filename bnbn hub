@@ -4,7 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
 local autoTP = false
-local speed = 30
+local speed = 25
 local grabbedBlock = false
 local collectedCount = 0
 local ESPEnabled = true
