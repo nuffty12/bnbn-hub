@@ -1,14 +1,17 @@
+
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
-local autoTP = false
+
 local speed = 25
 local grabbedBlock = false
 local collectedCount = 0
 local ESPEnabled = true
 local currentTarget = nil
+local autoTP = false
 
 local loadingGui = Instance.new("ScreenGui")
 loadingGui.Name = "BnbnLoading"
@@ -33,6 +36,7 @@ for i=1,9 do
     task.wait(1)
 end
 loadingGui:Destroy()
+
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BnbnHubGUI"
@@ -109,6 +113,7 @@ espToggle.MouseButton1Click:Connect(function()
     espToggle.Text = "ESP: "..(ESPEnabled and "ON" or "OFF")
 end)
 
+
 local function getLuckyBlocks()
     local folder = workspace:FindFirstChild("LuckyBlocks")
     if not folder then return {} end
@@ -129,6 +134,7 @@ local function getSafezone()
     return folder5:FindFirstChild("Safezone")
 end
 
+
 local function flyTo(targetPart)
     if not targetPart or not targetPart.Parent then return end
     local char = player.Character
@@ -137,60 +143,83 @@ local function flyTo(targetPart)
     local humanoid = char:FindFirstChild("Humanoid")
     if not humanoid then return end
     humanoid.PlatformStand = true
+
     if hrp:FindFirstChild("FlyBV") then hrp.FlyBV:Destroy() end
     if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+
     local bv = Instance.new("BodyVelocity")
     bv.Name = "FlyBV"
-    bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+    bv.MaxForce = Vector3.new(1e6,1e6,1e6)
     bv.Velocity = Vector3.new(0,0,0)
     bv.Parent = hrp
+
     local bg = Instance.new("BodyGyro")
     bg.Name = "FlyGyro"
     bg.MaxTorque = Vector3.new(4e5,4e5,4e5)
-    bg.D = 50
+    bg.D = 70
     bg.P = 1e4
     bg.CFrame = hrp.CFrame
     bg.Parent = hrp
+
     while targetPart and targetPart.Parent and autoTP do
         RunService.RenderStepped:Wait()
         local targetPos = targetPart.Position
         local direction = targetPos - hrp.Position
         local distance = direction.Magnitude
-        local heightOffset = distance > 10 and 5 or 1.5
-        local moveTarget = Vector3.new(targetPos.X, targetPos.Y + heightOffset, targetPos.Z)
-        local horizontalDir = Vector3.new(moveTarget.X - hrp.Position.X, 0, moveTarget.Z - hrp.Position.Z)
-        if horizontalDir.Magnitude > 0 then
-            local ray = Ray.new(hrp.Position, horizontalDir.Unit * math.min(6, horizontalDir.Magnitude))
-            local part = workspace:FindPartOnRayWithIgnoreList(ray,{hrp,char,targetPart})
-            if part and not part:IsDescendantOf(workspace:FindFirstChild("LuckyBlocks") or {}) then
-                moveTarget = moveTarget + Vector3.new(0, 5, 0)
-            end
+
+        local heightOffset
+        if distance > 15 then
+            heightOffset = 10
+        elseif distance > 7 then
+            heightOffset = 6
+        else
+            heightOffset = 2
         end
+
+        local moveTarget = Vector3.new(targetPos.X, targetPos.Y + heightOffset, targetPos.Z)
+
+       
+        local rayDir = (moveTarget - hrp.Position)
+        local ray = Ray.new(hrp.Position, rayDir.Unit * math.min(8, rayDir.Magnitude))
+        local hitPart = workspace:FindPartOnRayWithIgnoreList(ray,{hrp,char,targetPart})
+        if hitPart and not hitPart:IsDescendantOf(workspace:FindFirstChild("LuckyBlocks") or {}) then
+            moveTarget = moveTarget + Vector3.new(0, math.clamp(rayDir.Magnitude/2, 3, 8), 0)
+        end
+
         local moveDir = (moveTarget - hrp.Position)
-        bv.Velocity = moveDir.Unit * speed
+        if moveDir.Magnitude > 0 then
+            bv.Velocity = moveDir.Unit * speed
+        end
         bg.CFrame = CFrame.new(hrp.Position, moveTarget)
+
         distanceLabel.Text = "Distance: "..math.floor((hrp.Position - targetPos).Magnitude).." studs"
+
         if distance < 2 then break end
     end
+
     bv:Destroy()
     bg:Destroy()
     humanoid.PlatformStand = false
 end
 
+
 local function trackBlocks()
     local folder = workspace:FindFirstChild("LuckyBlocks")
     if not folder then return end
+
     for _,b in pairs(folder:GetChildren()) do
         if b:IsA("Part") and b.Name=="LuckyBlock" then
             currentTarget = b
             break
         end
     end
+
     folder.ChildAdded:Connect(function(child)
         if child:IsA("Part") and child.Name=="LuckyBlock" then
             currentTarget = child
         end
     end)
+
     folder.ChildRemoved:Connect(function(child)
         if child == currentTarget then
             currentTarget = nil
@@ -199,6 +228,7 @@ local function trackBlocks()
 end
 trackBlocks()
 
+-- ESP
 local ESPParts = {}
 RunService.RenderStepped:Connect(function()
     if not ESPEnabled then
@@ -206,6 +236,7 @@ RunService.RenderStepped:Connect(function()
         ESPParts = {}
         return
     end
+
     local blocks = getLuckyBlocks()
     for _,b in pairs(blocks) do
         if not ESPParts[b] then
@@ -221,6 +252,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- MAIN LOOP
 spawn(function()
     while true do
         RunService.RenderStepped:Wait()
@@ -228,6 +260,7 @@ spawn(function()
         local hrp = player.Character.HumanoidRootPart
         local safezone = getSafezone()
         if not safezone then continue end
+
         if grabbedBlock then
             flyTo(safezone)
             if hrp and hrp.Parent then
@@ -247,6 +280,7 @@ spawn(function()
     end
 end)
 
+
 player.CharacterAdded:Connect(function(char)
     grabbedBlock = false
     if not screenGui or not screenGui.Parent then
@@ -254,9 +288,11 @@ player.CharacterAdded:Connect(function(char)
     end
 end)
 
+
 pcall(function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/welomenchaina/Loader/refs/heads/main/AntiKickLoader",true))()
 end)
+
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.KeyCode == Enum.KeyCode.RightControl then
