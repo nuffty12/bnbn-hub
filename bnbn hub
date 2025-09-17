@@ -1,0 +1,265 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+local autoTP = false
+local speed = 30
+local grabbedBlock = false
+local collectedCount = 0
+local ESPEnabled = true
+local currentTarget = nil
+
+local loadingGui = Instance.new("ScreenGui")
+loadingGui.Name = "BnbnLoading"
+loadingGui.ResetOnSpawn = false
+loadingGui.Parent = player:WaitForChild("PlayerGui")
+
+local loadFrame = Instance.new("Frame", loadingGui)
+loadFrame.Size = UDim2.new(0,400,0,150)
+loadFrame.Position = UDim2.new(0.5,-200,0.5,-75)
+loadFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+
+local loadText = Instance.new("TextLabel", loadFrame)
+loadText.Size = UDim2.new(1,0,1,0)
+loadText.BackgroundTransparency = 1
+loadText.TextColor3 = Color3.fromRGB(255,255,255)
+loadText.Font = Enum.Font.SourceSansBold
+loadText.TextSize = 22
+loadText.Text = "Loading Bnbn Hub...\nJoin our Discord! (https://discord.gg/JN6jtbk4Na)"
+
+for i=1,9 do
+    loadText.Text = "Loading Bnbn Hub... "..i.."/9\nJoin our Discord! (https://discord.gg/JN6jtbk4Na)"
+    task.wait(1)
+end
+loadingGui:Destroy()
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BnbnHubGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0,300,0,220)
+frame.Position = UDim2.new(0.5,-150,0.5,-110)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.Active = true
+frame.Draggable = true
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundTransparency = 1
+title.Text = "Bnbn Hub"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+
+local toggleBtn = Instance.new("TextButton", frame)
+toggleBtn.Size = UDim2.new(0,200,0,40)
+toggleBtn.Position = UDim2.new(0.5,-100,0,40)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(44,120,224)
+toggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 16
+toggleBtn.Text = "Auto TP: OFF"
+
+local exitBtn = Instance.new("TextButton", frame)
+exitBtn.Size = UDim2.new(0,100,0,30)
+exitBtn.Position = UDim2.new(0.5,-50,0,90)
+exitBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+exitBtn.TextColor3 = Color3.fromRGB(255,255,255)
+exitBtn.Font = Enum.Font.SourceSansBold
+exitBtn.TextSize = 14
+exitBtn.Text = "Exit"
+
+local distanceLabel = Instance.new("TextLabel", frame)
+distanceLabel.Size = UDim2.new(1,0,0,20)
+distanceLabel.Position = UDim2.new(0,0,1,-80)
+distanceLabel.BackgroundTransparency = 1
+distanceLabel.TextColor3 = Color3.fromRGB(255,255,255)
+distanceLabel.Font = Enum.Font.SourceSans
+distanceLabel.TextSize = 16
+distanceLabel.Text = "Distance: N/A"
+
+local collectedLabel = Instance.new("TextLabel", frame)
+collectedLabel.Size = UDim2.new(1,0,0,20)
+collectedLabel.Position = UDim2.new(0,0,1,-60)
+collectedLabel.BackgroundTransparency = 1
+collectedLabel.TextColor3 = Color3.fromRGB(0,255,0)
+collectedLabel.Font = Enum.Font.SourceSans
+collectedLabel.TextSize = 16
+collectedLabel.Text = "Collected: 0"
+
+local espToggle = Instance.new("TextButton", frame)
+espToggle.Size = UDim2.new(0,200,0,30)
+espToggle.Position = UDim2.new(0.5,-100,0,130)
+espToggle.BackgroundColor3 = Color3.fromRGB(255,165,0)
+espToggle.TextColor3 = Color3.fromRGB(0,0,0)
+espToggle.Font = Enum.Font.SourceSansBold
+espToggle.TextSize = 16
+espToggle.Text = "ESP: ON"
+
+toggleBtn.MouseButton1Click:Connect(function()
+    autoTP = not autoTP
+    toggleBtn.Text = "Auto TP: "..(autoTP and "ON" or "OFF")
+end)
+exitBtn.MouseButton1Click:Connect(function() autoTP = false end)
+espToggle.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    espToggle.Text = "ESP: "..(ESPEnabled and "ON" or "OFF")
+end)
+
+local function getLuckyBlocks()
+    local folder = workspace:FindFirstChild("LuckyBlocks")
+    if not folder then return {} end
+    local blocks = {}
+    for _,b in pairs(folder:GetChildren()) do
+        if b:IsA("Part") and b.Name=="LuckyBlock" then
+            table.insert(blocks,b)
+        end
+    end
+    return blocks
+end
+
+local function getSafezone()
+    local worlds = workspace:FindFirstChild("Worlds")
+    if not worlds then return nil end
+    local folder5 = worlds:FindFirstChild("5")
+    if not folder5 then return nil end
+    return folder5:FindFirstChild("Safezone")
+end
+
+local function flyTo(targetPart)
+    if not targetPart or not targetPart.Parent then return end
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = char.HumanoidRootPart
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    humanoid.PlatformStand = true
+    if hrp:FindFirstChild("FlyBV") then hrp.FlyBV:Destroy() end
+    if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "FlyBV"
+    bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+    bv.Velocity = Vector3.new(0,0,0)
+    bv.Parent = hrp
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "FlyGyro"
+    bg.MaxTorque = Vector3.new(4e5,4e5,4e5)
+    bg.D = 50
+    bg.P = 1e4
+    bg.CFrame = hrp.CFrame
+    bg.Parent = hrp
+    while targetPart and targetPart.Parent and autoTP do
+        RunService.RenderStepped:Wait()
+        local targetPos = targetPart.Position
+        local direction = targetPos - hrp.Position
+        local distance = direction.Magnitude
+        local heightOffset = distance > 10 and 5 or 1.5
+        local moveTarget = Vector3.new(targetPos.X, targetPos.Y + heightOffset, targetPos.Z)
+        local horizontalDir = Vector3.new(moveTarget.X - hrp.Position.X, 0, moveTarget.Z - hrp.Position.Z)
+        if horizontalDir.Magnitude > 0 then
+            local ray = Ray.new(hrp.Position, horizontalDir.Unit * math.min(6, horizontalDir.Magnitude))
+            local part = workspace:FindPartOnRayWithIgnoreList(ray,{hrp,char,targetPart})
+            if part and not part:IsDescendantOf(workspace:FindFirstChild("LuckyBlocks") or {}) then
+                moveTarget = moveTarget + Vector3.new(0, 5, 0)
+            end
+        end
+        local moveDir = (moveTarget - hrp.Position)
+        bv.Velocity = moveDir.Unit * speed
+        bg.CFrame = CFrame.new(hrp.Position, moveTarget)
+        distanceLabel.Text = "Distance: "..math.floor((hrp.Position - targetPos).Magnitude).." studs"
+        if distance < 2 then break end
+    end
+    bv:Destroy()
+    bg:Destroy()
+    humanoid.PlatformStand = false
+end
+
+local function trackBlocks()
+    local folder = workspace:FindFirstChild("LuckyBlocks")
+    if not folder then return end
+    for _,b in pairs(folder:GetChildren()) do
+        if b:IsA("Part") and b.Name=="LuckyBlock" then
+            currentTarget = b
+            break
+        end
+    end
+    folder.ChildAdded:Connect(function(child)
+        if child:IsA("Part") and child.Name=="LuckyBlock" then
+            currentTarget = child
+        end
+    end)
+    folder.ChildRemoved:Connect(function(child)
+        if child == currentTarget then
+            currentTarget = nil
+        end
+    end)
+end
+trackBlocks()
+
+local ESPParts = {}
+RunService.RenderStepped:Connect(function()
+    if not ESPEnabled then
+        for _,p in pairs(ESPParts) do if p:FindFirstChild("Box") then p.Box:Destroy() end end
+        ESPParts = {}
+        return
+    end
+    local blocks = getLuckyBlocks()
+    for _,b in pairs(blocks) do
+        if not ESPParts[b] then
+            local box = Instance.new("BoxHandleAdornment")
+            box.Adornee = b
+            box.Size = b.Size + Vector3.new(0.5,0.5,0.5)
+            box.Color3 = Color3.fromRGB(255,255,0)
+            box.Transparency = 0.5
+            box.AlwaysOnTop = true
+            box.Parent = b
+            ESPParts[b] = {Box = box}
+        end
+    end
+end)
+
+spawn(function()
+    while true do
+        RunService.RenderStepped:Wait()
+        if not autoTP or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then continue end
+        local hrp = player.Character.HumanoidRootPart
+        local safezone = getSafezone()
+        if not safezone then continue end
+        if grabbedBlock then
+            flyTo(safezone)
+            if hrp and hrp.Parent then
+                hrp.CFrame = CFrame.new(safezone.Position + Vector3.new(0,5,0))
+            end
+            grabbedBlock = false
+            currentTarget = nil
+            task.wait(0.5)
+        elseif currentTarget then
+            flyTo(currentTarget)
+            if currentTarget and (hrp.Position - currentTarget.Position).Magnitude < 3 then
+                grabbedBlock = true
+                collectedCount = collectedCount + 1
+                collectedLabel.Text = "Collected: "..collectedCount
+            end
+        end
+    end
+end)
+
+player.CharacterAdded:Connect(function(char)
+    grabbedBlock = false
+    if not screenGui or not screenGui.Parent then
+        screenGui.Parent = player:WaitForChild("PlayerGui")
+    end
+end)
+
+pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/welomenchaina/Loader/refs/heads/main/AntiKickLoader",true))()
+end)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == Enum.KeyCode.RightControl then
+        screenGui.Enabled = not screenGui.Enabled
+    end
+end)
